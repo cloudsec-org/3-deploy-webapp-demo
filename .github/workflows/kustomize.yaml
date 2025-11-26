@@ -19,7 +19,6 @@ jobs:
   cortex-scan:
     name: "Job 1 - Cortex Cloud Scan - Security checks"
     runs-on: ubuntu-latest
-    needs: validate-iac
     steps:
       - name: Checkout IaC Repository
         uses: actions/checkout@v4
@@ -62,7 +61,7 @@ jobs:
   update_kustomization:
     name: "Job 2 - Update Kustomization YAML for k8s deployment"
     runs-on: ubuntu-latest
-    needs: check_k8s_with_checkov
+    needs: cortex-scan
 
     steps:
       # Checkout repo
