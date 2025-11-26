@@ -5,38 +5,62 @@ on:
   repository_dispatch:
     types: [deploy-image]
 
+env:
+  # Cortex secrets
+  CORTEX_API_KEY: ${{ secrets.CORTEX_API_KEY }}
+  CORTEX_API_KEY_ID: ${{ vars.CORTEX_API_KEY_ID }}
+  CORTEX_API_URL: ${{ vars.CORTEX_API_URL }}
+
 jobs:
 
   ###############################################
   # Check Kubernetes YAML with Checkov
   ###############################################
-  check_k8s_with_checkov:
-    name: Security Scan - Kubernetes deployment (Checkov)
+  cortex-scan:
+    name: "Job 1 - Cortex Cloud Scan - Security checks"
     runs-on: ubuntu-latest
-
+    needs: validate-iac
     steps:
-      # Checkout repo to access YAML files
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Checkout IaC Repository
+        uses: actions/checkout@v4
 
-      # Run Checkov scan on all Kubernetes manifests
-      - name: Scan Kubernetes YAML with Checkov
-        uses: bridgecrewio/checkov-action@master
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          directory: ${{ github.workspace }}
-          framework: kubernetes
-          quiet: true
-          output_format: github_failed_only
-          # Do not fail the pipeline if there are issues
-          soft_fail: true
-        # Ensure the job continues even if Checkov finds issues
-        continue-on-error: true
+          node-version: 22
+
+      - name: Verify Node.js Version
+        run: node -v
+
+      - name: Download Cortex CLI
+        run: |
+          set -x
+          crtx_resp=$(curl "${CORTEX_API_URL}/public_api/v1/unified-cli/releases/download-link?os=linux&architecture=amd64" \
+            -H "x-xdr-auth-id: ${CORTEX_API_KEY_ID}" \
+            -H "Authorization: ${CORTEX_API_KEY}")
+          crtx_url=$(echo $crtx_resp | jq -r ".signed_url")
+          curl -o cortexcli $crtx_url
+          chmod +x cortexcli
+          ./cortexcli --version
+
+      - name: Run Cortex CLI Code Scan
+        run: |
+          ./cortexcli \
+            --api-base-url "${CORTEX_API_URL}" \
+            --api-key "${CORTEX_API_KEY}" \
+            --api-key-id "${CORTEX_API_KEY_ID}" \
+            code scan \
+            --directory "${{github.workspace}}" \
+            --repo-id "${{ github.repository }}" \
+            --branch "${{ github.ref }}" \
+            --source "GITHUB_ACTIONS" \
+            --create-repo-if-missing
 
   ###############################################
   # Update kustomization.yaml
   ###############################################
   update_kustomization:
-    name: Update Kustomization YAML
+    name: "Job 2 - Update Kustomization YAML for k8s deployment"
     runs-on: ubuntu-latest
     needs: check_k8s_with_checkov
 
