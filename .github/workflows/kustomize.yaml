@@ -14,7 +14,7 @@ env:
 jobs:
 
   ###############################################
-  # Check Kubernetes YAML with Checkov
+  # Check Kubernetes YAML with Cortex Cloud
   ###############################################
   cortex-scan:
     name: "Job 1 - Cortex Cloud Scan - Security checks"
